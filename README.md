@@ -123,6 +123,201 @@ $ pip install .
 
 For further information and introduction see python/README.md
 
+
+## INCREMENTAL TRAINING 
+
+On branch IncrementalTraining
+Changes to be committed:
+modified: src/args.cc
+modified: src/args.h
+modified: src/densematrix.cc
+modified: src/dictionary.h
+modified: src/fasttext.cc
+modified: src/loss.h
+modified: src/model.cc
+modified: src/model.h
+modified: src/vector.cc
+modified: src/vector.h
+
+What is this for
+Added two new parameters -nepoch index of a current epoch, -inputModel <checkpoint_files_prefix> .
+When -nepoch N is specified the tool exits after each epoch and saves checkpoint files with checkpoint_files_prefix .
+When -nepoch 0 the checkpoint is not loaded.
+For large data that does not fit into memory, you need to shuffle it and split into equal large parts (as big as fits into memory) for the best performance.
+
+This allows for:
+
+training and evaluation after each epoch
+training on split set of data with all data not fitting into memory at once
+fine tuning already trained model
+Usage examples:
+Regular training in one shot with all the data:
+./fasttext.exe supervised -input in_sample_td_1p.txt -output modelx -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10
+./fasttext test modelx.bin in_sample_td_1p.txt 1
+
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+start training...
+Progress: 100.0% words/sec/thread: 11638890 lr:  0.000000 loss:  0.204641 ETA:   0h 0m
+
+N       4002234
+P@1     0.994
+R@1     0.994
+Number of examples: 4002234
+Training one epoch after another with checkpoints on the same data:
+./fasttext.exe supervised -input in_sample_td_1p.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10 -nepoch 0 -inputModel empty.bin
+./fasttext test model0.bin in_sample_td_1p.txt 1
+for e in 1 2 3 4 5 6 7 8 9 ; do
+  p=`awk "BEGIN { print $e -1 }"` ;
+  echo ./fasttext.exe supervised -input in_sample_td_1p.txt -output model$e -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$p.bin -epoch 10 -nepoch $e ;
+  ./fasttext.exe supervised -input in_sample_td_1p.txt -output model$e -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$p.bin -epoch 10 -nepoch $e ;
+  echo ./fasttext test model$e.bin in_sample_td_1p.txt 1 ;
+  ./fasttext test model$e.bin in_sample_td_1p.txt 1 ;
+done
+
+
+...
+
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+Update args
+Load dict from trained model
+Read 96M words
+Load dict from training data
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+start training...
+Progress: 100.0% words/sec/thread: 108804462 lr:  0.000000 loss:  0.208056 ETA:   0h 0m
+./fasttext test model8.bin in_sample_td_1p.txt 1
+N       4002234
+P@1     0.991
+R@1     0.991
+Number of examples: 4002234
+./fasttext.exe supervised -input in_sample_td_1p.txt -output model9 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model8.bin -epoch 10 -nepoch 9
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+Update args
+Load dict from trained model
+Read 96M words
+Load dict from training data
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+start training...
+Progress: 100.0% words/sec/thread: 119974496 lr:  0.000000 loss:  0.188905 ETA:   0h 0m
+./fasttext test model9.bin in_sample_td_1p.txt 1
+N       4002234
+P@1     0.993
+R@1     0.993
+Number of examples: 4002234
+Test training one epoch after another with two different parts of TD:
+$ wc -l td*txt
+  2001138 td_part1.txt
+  2001096 td_part2.txt
+  4002234 total
+
+./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 2 -nepoch 0
+./fasttext test model0.bin in_sample_td_1p.txt 1
+./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model0.bin -epoch 2 -nepoch 1
+./fasttext test model1.bin in_sample_td_1p.txt 1
+
+N       4002234
+P@1     0.805
+R@1     0.805
+Number of examples: 4002234
+Compare it to the 1 epoch e2e without a split:
+
+./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 1
+./fasttext test modely.bin in_sample_td_1p.txt 1
+N       4002234
+P@1     0.805
+R@1     0.805
+Number of examples: 4002234
+Train with 2 parts of data for 10 epoch (equivalent to examples 1 & 2 but data are split into two random equal in size parts):
+./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 20 -nepoch 0
+./fasttext test model0.bin in_sample_td_1p.txt 1
+./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model0.bin -epoch 20 -nepoch 1
+./fasttext test model1.bin in_sample_td_1p.txt 1
+
+for e in `seq 2 2 19` ; do
+
+  p=`awk "BEGIN { print $e -1 }"` ;
+  n=`awk "BEGIN { print $e +1 }"` ;
+
+  echo ./fasttext.exe supervised -input td_part2.txt -output model$e -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$p.bin -epoch 20 -nepoch $e ;
+  ./fasttext.exe supervised -input td_part2.txt -output model$e -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$p.bin -epoch 20 -nepoch $e ;
+
+  echo ./fasttext.exe supervised -input td_part1.txt -output model$n -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$e.bin -epoch 20 -nepoch $n ;
+  ./fasttext.exe supervised -input td_part1.txt -output model$n -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model$e.bin -epoch 20 -nepoch $n ;
+
+  ./fasttext test model$n.bin in_sample_td_1p.txt 1 ;
+
+done
+
+...
+Read 48M words
+Number of words:  228529
+Number of labels: 2
+Update args
+Load dict from trained model
+Read 48M words
+Load dict from training data
+Read 48M words
+Number of words:  228529
+Number of labels: 2
+start training...
+Progress: 100.0% words/sec/thread: 207331200 lr:  0.000000 loss:  0.194417 ETA:   0h 0m
+N       4002234
+P@1     0.993
+R@1     0.993
+Number of examples: 4002234
+Test OVA Loss
+./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 2 -nepoch 0
+./fasttext test model0.bin in_sample_td_1p.txt 1
+./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -inputModel model0.bin -epoch 2 -nepoch 1
+./fasttext test model1.bin in_sample_td_1p.txt 1
+Compare it to the 1 epoch e2e without a split:
+
+./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 1
+./fasttext test modely.bin in_sample_td_1p.txt 1
+
+A:   0h 0m 0s
+N       4002234
+P@1     0.808
+R@1     0.808
+Read 48M words
+Number of words:  228529
+Number of labels: 2
+Update args
+Load dict from trained model
+Read 48M words
+Load dict from training data
+Read 48M words
+Number of words:  228529
+Number of labels: 2
+Progress: 100.0% words/sec/thread: 2326473 lr:  0.000000 avg.loss:  0.855847 ETA:   0h 0m 0s
+N       4002234
+P@1     0.821
+R@1     0.821
+
+
+Read 96M words
+Number of words:  234072
+Number of labels: 2
+Progress: 100.0% words/sec/thread: 1138778 lr:  0.000000 avg.loss:  0.854935 ETA:   0h 0m 0s
+
+N       4002234
+P@1     0.821
+R@1     0.821
+
+
+
+
+
 ## Example use cases
 
 This library has two main use cases: word representation learning and text classification.
