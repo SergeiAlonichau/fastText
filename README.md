@@ -128,6 +128,7 @@ For further information and introduction see python/README.md
 
 On branch IncrementalTraining
 Changes to be committed:
+```
 modified: src/args.cc
 modified: src/args.h
 modified: src/densematrix.cc
@@ -138,6 +139,7 @@ modified: src/model.cc
 modified: src/model.h
 modified: src/vector.cc
 modified: src/vector.h
+```
 
 What is this for
 Added two new parameters -nepoch index of a current epoch, -inputModel <checkpoint_files_prefix> .
@@ -152,6 +154,7 @@ training on split set of data with all data not fitting into memory at once
 fine tuning already trained model
 Usage examples:
 Regular training in one shot with all the data:
+```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modelx -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10
 ./fasttext test modelx.bin in_sample_td_1p.txt 1
 
@@ -165,7 +168,10 @@ N       4002234
 P@1     0.994
 R@1     0.994
 Number of examples: 4002234
+```
+
 Training one epoch after another with checkpoints on the same data:
+```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10 -nepoch 0 -inputModel empty.bin
 ./fasttext test model0.bin in_sample_td_1p.txt 1
 for e in 1 2 3 4 5 6 7 8 9 ; do
@@ -214,12 +220,16 @@ N       4002234
 P@1     0.993
 R@1     0.993
 Number of examples: 4002234
+```
+
 Test training one epoch after another with two different parts of TD:
+```
 $ wc -l td*txt
   2001138 td_part1.txt
   2001096 td_part2.txt
   4002234 total
-
+```
+```
 ./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 2 -nepoch 0
 ./fasttext test model0.bin in_sample_td_1p.txt 1
 ./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model0.bin -epoch 2 -nepoch 1
@@ -275,13 +285,18 @@ N       4002234
 P@1     0.993
 R@1     0.993
 Number of examples: 4002234
+```
+
 Test OVA Loss
+```
 ./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 2 -nepoch 0
 ./fasttext test model0.bin in_sample_td_1p.txt 1
 ./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -inputModel model0.bin -epoch 2 -nepoch 1
 ./fasttext test model1.bin in_sample_td_1p.txt 1
-Compare it to the 1 epoch e2e without a split:
+```
 
+Compare it to the 1 epoch e2e without a split:
+```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 1
 ./fasttext test modely.bin in_sample_td_1p.txt 1
 
@@ -313,7 +328,7 @@ Progress: 100.0% words/sec/thread: 1138778 lr:  0.000000 avg.loss:  0.854935 ETA
 N       4002234
 P@1     0.821
 R@1     0.821
-
+```
 
 
 
