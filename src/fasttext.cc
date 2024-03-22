@@ -41,7 +41,10 @@ std::shared_ptr<Loss> FastText::createLoss(std::shared_ptr<Matrix>& output) {
     case loss_name::softmax:
       return std::make_shared<SoftmaxLoss>(output);
     case loss_name::ova:
-      return std::make_shared<OneVsAllLoss>(output);
+      if(args_->neg > 5)
+        return std::make_shared<OneVsSomeLoss>(output, args_->neg);
+      else
+        return std::make_shared<OneVsAllLoss>(output);
     default:
       throw std::runtime_error("Unknown loss");
   }
@@ -532,7 +535,7 @@ std::vector<std::pair<std::string, Vector>> FastText::getNgramVectors(
     if (ngrams[i] >= 0) {
       vec.addRow(*input_, ngrams[i]);
     }
-    result.emplace_back(substrings[i], std::move(vec));
+    result.push_back(std::make_pair(substrings[i], std::move(vec)));
   }
   return result;
 }
@@ -609,7 +612,7 @@ std::vector<std::pair<real, std::string>> FastText::getAnalogies(
     const std::string& wordA,
     const std::string& wordB,
     const std::string& wordC) {
-  Vector query(args_->dim);
+  Vector query = Vector(args_->dim);
   query.zero();
 
   Vector buffer(args_->dim);
@@ -626,14 +629,25 @@ std::vector<std::pair<real, std::string>> FastText::getAnalogies(
 }
 
 bool FastText::keepTraining(const int64_t ntokens) const {
-  return tokenCount_ < args_->epoch * ntokens && !trainException_;
+  return tokenCount_ < (-1 == args_->nepoch ? args_->epoch * ntokens : (args_->nepoch + 1) * ntokens) && !trainException_;
 }
 
 void FastText::trainThread(int32_t threadId, const TrainCallback& callback) {
   std::ifstream ifs(args_->input);
-  utils::seek(ifs, threadId * utils::size(ifs) / args_->thread);
+  // i-th thread should continue to read the data in the next epoch instead of starting over again
+  utils::seek(ifs, -1 == args_->nepoch ? (utils::size(ifs) * threadId / args_->thread) : (utils::size(ifs) * ((threadId + args_->nepoch) % args_->thread) / args_->thread));
 
   Model::State state(args_->dim, output_->size(0), threadId + args_->seed);
+
+  // if needed, load a checkpoint
+  if (0 < args_->nepoch) {
+      std::ifstream inCheckPoint(args_->inputModel + std::string(".p") + std::to_string(threadId), std::ifstream::binary);
+      if (!inCheckPoint.is_open()) {
+          throw std::invalid_argument(args_->inputModel + " cannot be opened for re-training, no check points saved.");
+      }
+      Model::load_chk(inCheckPoint, &state, model_.get());
+      inCheckPoint.close();
+  }
 
   const int64_t ntokens = dict_->ntokens();
   int64_t localTokenCount = 0;
@@ -675,6 +689,14 @@ void FastText::trainThread(int32_t threadId, const TrainCallback& callback) {
   if (threadId == 0)
     loss_ = state.getLoss();
   ifs.close();
+
+  // save a checkpoint, if needed
+  if (0 <= args_->nepoch && !trainException_) {
+      std::ofstream outCheckPoint(args_->output + std::string(".bin.p") + std::to_string(threadId), std::ofstream::binary);
+      Model::save_chk(outCheckPoint, &state, model_.get());
+      outCheckPoint.close();
+  }
+
 }
 
 std::shared_ptr<Matrix> FastText::getInputMatrixFromFile(
@@ -761,11 +783,88 @@ void FastText::train(const Args& args, const TrainCallback& callback) {
     input_ = createRandomMatrix();
   }
   output_ = createTrainOutputMatrix();
+
   quant_ = false;
   auto loss = createLoss(output_);
   bool normalizeGradient = (args_->model == model_name::sup);
+
+  // training is incremental and the epoch is not the first one
+  if (0 < args.nepoch) {
+
+    std::ifstream inModel(args_->inputModel, std::ifstream::binary);
+    if (!inModel.is_open()) {
+        throw std::invalid_argument(args_->inputModel + " cannot be opened for re-training");
+    }
+    if (!checkModel(inModel)) {
+        throw std::invalid_argument(args_->inputModel + " has wrong model format");
+    }
+
+    std::shared_ptr<Args> old_args_ = std::make_shared<Args>();
+    old_args_->load(inModel);
+
+    std::cerr << "Update args" << std::endl;
+    args_->dim = old_args_->dim;
+    args_->loss = old_args_->loss;
+    args_->model = old_args_->model;
+
+    if (args_->ws <= 0) { args_->ws = old_args_->ws; }
+    if (args_->neg <= 0) { args_->neg = old_args_->neg; }
+    if (args_->wordNgrams <= 0) { args_->wordNgrams = old_args_->wordNgrams; }
+    if (args_->epoch <= 0) { args_->epoch = old_args_->epoch; }
+    if (args_->minCount <= 0) { args_->minCount = old_args_->minCount; }
+    if (args_->bucket <= 0) { args_->bucket = old_args_->bucket; }
+    if (args_->minn <= 0) { args_->minn = old_args_->minn; }
+    if (args_->maxn <= 0) { args_->maxn = old_args_->maxn; }
+    if (args_->lrUpdateRate <= 0) { args_->lrUpdateRate = old_args_->lrUpdateRate; }
+    if (fabs(args_->t - 0.0) <= 1e-5) { args_->t = old_args_->t; }
+    if (fabs(args_->lr - 0.0) <= 1e-6) { args_->lr = old_args_->lr; }
+
+    std::cerr << "Load dict from trained model" << std::endl;
+    dict_ = std::make_shared<Dictionary>(args_, inModel);
+    std::cerr << "Read " << dict_->ntokens() / 1000000 << "M words" << std::endl;
+
+    std::cerr << "Load dict from training data" << std::endl;
+    std::ifstream ifs(args_->input);
+    if (!ifs.is_open()) {
+        throw std::invalid_argument(args_->input + " cannot be opened for training");
+    }
+    Dictionary dictInData = Dictionary(args_);
+    dictInData.readFromFile(ifs);
+    ifs.close();
+
+    // copy the exact number of tokens in the new training data batch
+    dict_->setNtokens(dictInData.ntokens());
+
+    inModel.close();
+
+    // load checkpoint, if this is not the first run under checkpoints
+    std::ifstream iwCheckPoint(args_->inputModel + std::string(".iw"), std::ifstream::binary);
+    if (!iwCheckPoint.is_open()) {
+        throw std::invalid_argument(args_->inputModel + " cannot be opened for re-training, no check points saved.");
+    }
+    input_->load(iwCheckPoint);
+    iwCheckPoint.close();
+
+    std::ifstream owCheckPoint(args_->inputModel + std::string(".ow"), std::ifstream::binary);
+    if (!owCheckPoint.is_open()) {
+        throw std::invalid_argument(args_->inputModel + " cannot be opened for re-training, no check points saved.");
+    }
+    output_->load(owCheckPoint);
+    owCheckPoint.close();
+  }
+
   model_ = std::make_shared<Model>(input_, output_, loss, normalizeGradient);
   startThreads(callback);
+
+  // save checkpoint, if needed
+  if (-1 != args_->nepoch && !trainException_) {
+      std::ofstream iwCheckPoint(args_->output + std::string(".bin.iw"), std::ofstream::binary);
+      input_->save(iwCheckPoint);
+      iwCheckPoint.close();
+      std::ofstream owCheckPoint(args_->output + std::string(".bin.ow"), std::ofstream::binary);
+      output_->save(owCheckPoint);
+      owCheckPoint.close();
+  }
 }
 
 void FastText::abort() {
@@ -778,7 +877,8 @@ void FastText::abort() {
 
 void FastText::startThreads(const TrainCallback& callback) {
   start_ = std::chrono::steady_clock::now();
-  tokenCount_ = 0;
+  const int64_t ntokens = dict_->ntokens();
+  tokenCount_ = (-1 == args_->nepoch ? 0 : args_->nepoch * ntokens);
   loss_ = -1;
   trainException_ = nullptr;
   std::vector<std::thread> threads;
@@ -790,7 +890,6 @@ void FastText::startThreads(const TrainCallback& callback) {
     // webassembly can't instantiate `std::thread`
     trainThread(0, callback);
   }
-  const int64_t ntokens = dict_->ntokens();
   // Same condition as trainThread
   while (keepTraining(ntokens)) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

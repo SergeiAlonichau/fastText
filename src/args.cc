@@ -8,8 +8,7 @@
 
 #include "args.h"
 
-#include <cstdlib>
-#include <cstdint>
+#include <stdlib.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -23,6 +22,7 @@ Args::Args() {
   dim = 100;
   ws = 5;
   epoch = 5;
+  nepoch = -1;
   minCount = 5;
   minCountLabel = 0;
   neg = 5;
@@ -107,7 +107,7 @@ std::string Args::metricToString(metric_name mn) const {
 }
 
 void Args::parseArgs(const std::vector<std::string>& args) {
-  const std::string& command(args[1]);
+  std::string command(args[1]);
   if (command == "supervised") {
     model = model_name::sup;
     loss = loss_name::softmax;
@@ -133,6 +133,8 @@ void Args::parseArgs(const std::vector<std::string>& args) {
         exit(EXIT_FAILURE);
       } else if (args[ai] == "-input") {
         input = std::string(args.at(ai + 1));
+      } else if (args[ai] == "-inputModel") {
+        inputModel = std::string(args.at(ai + 1));
       } else if (args[ai] == "-output") {
         output = std::string(args.at(ai + 1));
       } else if (args[ai] == "-lr") {
@@ -145,6 +147,8 @@ void Args::parseArgs(const std::vector<std::string>& args) {
         ws = std::stoi(args.at(ai + 1));
       } else if (args[ai] == "-epoch") {
         epoch = std::stoi(args.at(ai + 1));
+      } else if (args[ai] == "-nepoch") {
+        nepoch = std::stoi(args.at(ai + 1));
       } else if (args[ai] == "-minCount") {
         minCount = std::stoi(args.at(ai + 1));
       } else if (args[ai] == "-minCountLabel") {
@@ -230,6 +234,11 @@ void Args::parseArgs(const std::vector<std::string>& args) {
     printHelp();
     exit(EXIT_FAILURE);
   }
+  if (0 < nepoch && inputModel.empty()) {
+    std::cerr << "Empty input model." << std::endl;
+    printHelp();
+    exit(EXIT_FAILURE);
+  }
   if (wordNgrams <= 1 && maxn == 0 && !hasAutotune()) {
     bucket = 0;
   }
@@ -278,6 +287,7 @@ void Args::printTrainingHelp() {
       << "  -dim                size of word vectors [" << dim << "]\n"
       << "  -ws                 size of the context window [" << ws << "]\n"
       << "  -epoch              number of epochs [" << epoch << "]\n"
+      << "  -nepoch             in incremental training, 0-based epoch index [" << nepoch << "]\n"
       << "  -neg                number of negatives sampled [" << neg << "]\n"
       << "  -loss               loss function {ns, hs, softmax, one-vs-all} ["
       << lossToString(loss) << "]\n"
@@ -289,7 +299,8 @@ void Args::printTrainingHelp() {
       << pretrainedVectors << "]\n"
       << "  -saveOutput         whether output params should be saved ["
       << boolToString(saveOutput) << "]\n"
-      << "  -seed               random generator seed  [" << seed << "]\n";
+      << "  -seed               random generator seed  [" << seed << "]\n"
+      << "  -inputModel         saved checkpointed model file path (only for incremental training)\n";
 }
 
 void Args::printAutotuneHelp() {
@@ -402,13 +413,13 @@ metric_name Args::getAutotuneMetric() const {
   } else if (autotuneMetric == "f1") {
     return metric_name::f1score;
   } else if (autotuneMetric.substr(0, 18) == "precisionAtRecall:") {
-    size_t semicolon = autotuneMetric.find(':', 18);
+    size_t semicolon = autotuneMetric.find(":", 18);
     if (semicolon != std::string::npos) {
       return metric_name::precisionAtRecallLabel;
     }
     return metric_name::precisionAtRecall;
   } else if (autotuneMetric.substr(0, 18) == "recallAtPrecision:") {
-    size_t semicolon = autotuneMetric.find(':', 18);
+    size_t semicolon = autotuneMetric.find(":", 18);
     if (semicolon != std::string::npos) {
       return metric_name::recallAtPrecisionLabel;
     }
@@ -425,7 +436,7 @@ std::string Args::getAutotuneMetricLabel() const {
   } else if (
       metric == metric_name::precisionAtRecallLabel ||
       metric == metric_name::recallAtPrecisionLabel) {
-    size_t semicolon = autotuneMetric.find(':', 18);
+    size_t semicolon = autotuneMetric.find(":", 18);
     label = autotuneMetric.substr(semicolon + 1);
   } else {
     return label;
@@ -445,7 +456,7 @@ double Args::getAutotuneMetricValue() const {
       metric == metric_name::recallAtPrecisionLabel ||
       metric == metric_name::recallAtPrecision) {
     size_t firstSemicolon = 18; // semicolon position in "precisionAtRecall:"
-    size_t secondSemicolon = autotuneMetric.find(':', firstSemicolon);
+    size_t secondSemicolon = autotuneMetric.find(":", firstSemicolon);
     const std::string valueStr =
         autotuneMetric.substr(firstSemicolon, secondSemicolon - firstSemicolon);
     value = std::stof(valueStr) / 100.0;

@@ -85,6 +85,21 @@ int64_t Vector::argmax() {
   return argmax;
 }
 
+void Vector::save(std::ostream& out) const {
+  int64_t n = data_.size();
+  out.write((char*)&n, sizeof(int64_t));
+  out.write((char*)data_.data(), n * sizeof(real));
+}
+
+void Vector::load(std::istream& in) {
+  int64_t n = 0;
+  in.read((char*)&n, sizeof(int64_t));
+  if(n != data_.size()) {
+    data_.resize(n);
+  }
+  in.read((char*)data_.data(), n * sizeof(real));
+}
+
 std::ostream& operator<<(std::ostream& os, const Vector& v) {
   os << std::setprecision(5);
   for (int64_t j = 0; j < v.size(); j++) {

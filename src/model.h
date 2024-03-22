@@ -41,11 +41,9 @@ class Model {
   Model& operator=(Model&& other) = delete;
 
   class State {
-   private:
+   public:
     real lossValue_;
     int64_t nexamples_;
-
-   public:
     Vector hidden;
     Vector output;
     Vector grad;
@@ -74,6 +72,10 @@ class Model {
 
   static const int32_t kUnlimitedPredictions = -1;
   static const int32_t kAllLabelsAsTarget = -1;
+
+  static void save_chk(std::ostream&, const Model::State*, const Model*);
+  static void load_chk(std::istream&, State*, Model*);
+
 };
 
 } // namespace fasttext

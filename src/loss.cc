@@ -142,6 +142,34 @@ real OneVsAllLoss::forward(
   return loss;
 }
 
+OneVsSomeLoss::OneVsSomeLoss(std::shared_ptr<Matrix>& wo, int32_t neg)
+    : BinaryLogisticLoss(wo), neg_(neg), uniform_() {
+  uniform_ = std::uniform_int_distribution<size_t>(0, wo->size(0)-1);
+}
+
+real OneVsSomeLoss::forward(
+    const std::vector<int32_t>& targets,
+    int32_t /* we take all targets here */,
+    Model::State& state,
+    real lr,
+    bool backprop) {
+  real loss = 0.0;
+  /* go over all positives */
+  for (size_t j = 0; j < targets.size(); j++) {
+    loss += binaryLogistic(targets[j], state, true, lr, backprop);
+  }
+  /* go over neg_ negatives */
+  int32_t i = 0;
+  while (i < neg_) {
+      int j = uniform_(state.rng);
+      if(!utils::contains(targets, j)) {
+        loss += binaryLogistic(j, state, false, lr, backprop);
+        i++;
+      }
+  }
+  return loss;
+}
+
 NegativeSamplingLoss::NegativeSamplingLoss(
     std::shared_ptr<Matrix>& wo,
     int neg,

@@ -42,7 +42,11 @@ Model::Model(
 void Model::computeHidden(const std::vector<int32_t>& input, State& state)
     const {
   Vector& hidden = state.hidden;
-  wi_->averageRowsToVector(hidden, input);
+  hidden.zero();
+  for (auto it = input.cbegin(); it != input.cend(); ++it) {
+    hidden.addRow(*wi_, *it);
+  }
+  hidden.mul(1.0 / input.size());
 }
 
 void Model::predict(
@@ -89,5 +93,57 @@ void Model::update(
 real Model::std_log(real x) const {
   return std::log(x + 1e-5);
 }
+
+void Model::save_chk(std::ostream& out, const Model::State* s, const Model* m) {
+
+    s->hidden.save(out);
+    s->output.save(out);
+    s->grad.save(out);
+
+    int32_t hsz = s->hidden.size();
+    int32_t osz = s->output.size();
+
+    out.write((char*)&hsz, sizeof(int32_t));   // TODO: remove this
+    out.write((char*)&osz, sizeof(int32_t));   // TODO: remove this
+    out.write((char*)&(s->lossValue_), sizeof(real));
+    out.write((char*)&(s->nexamples_), sizeof(int64_t));
+
+    int64_t n = m->loss_->t_sigmoid_.size();
+    out.write((char*)&n, sizeof(int64_t));
+    out.write((char*)m->loss_->t_sigmoid_.data(), n * sizeof(real));
+
+    n = m->loss_->t_log_.size();
+    out.write((char*)&n, sizeof(int64_t));
+    out.write((char*)m->loss_->t_log_.data(), n * sizeof(real));
+}
+
+void Model::load_chk(std::istream& in, Model::State* s, Model* m) {
+
+    s->hidden.load(in);
+    s->output.load(in);
+    s->grad.load(in);
+
+    int32_t hsz = 0;
+    int32_t osz = 0;
+
+    in.read((char*)&hsz, sizeof(int32_t));
+    in.read((char*)&osz, sizeof(int32_t));
+    in.read((char*)&(s->lossValue_), sizeof(real));
+    in.read((char*)&(s->nexamples_), sizeof(int64_t));
+
+    int64_t n = 0;
+    in.read((char*)&n, sizeof(int64_t));
+    if (m->loss_->t_sigmoid_.size() != n) {
+        m->loss_->t_sigmoid_.resize(n);
+    }
+    in.read((char*)m->loss_->t_sigmoid_.data(), n * sizeof(real));
+
+    in.read((char*)&n, sizeof(int64_t));
+    if (m->loss_->t_log_.size() != n) {
+        m->loss_->t_log_.resize(n);
+    }
+    in.read((char*)m->loss_->t_log_.data(), n * sizeof(real));
+}
+
 
 } // namespace fasttext

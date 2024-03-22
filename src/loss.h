@@ -28,7 +28,7 @@ class Loss {
       Predictions& heap,
       const Vector& output) const;
 
- protected:
+ public:
   std::vector<real> t_sigmoid_;
   std::vector<real> t_log_;
   std::shared_ptr<Matrix>& wo_;
@@ -74,6 +74,22 @@ class OneVsAllLoss : public BinaryLogisticLoss {
  public:
   explicit OneVsAllLoss(std::shared_ptr<Matrix>& wo);
   ~OneVsAllLoss() noexcept override = default;
+  real forward(
+      const std::vector<int32_t>& targets,
+      int32_t targetIndex,
+      Model::State& state,
+      real lr,
+      bool backprop) override;
+};
+
+class OneVsSomeLoss : public BinaryLogisticLoss {
+ protected:
+  int32_t neg_; /* number of negatives to sample per example */
+  std::uniform_int_distribution<size_t> uniform_;
+
+ public:
+  explicit OneVsSomeLoss(std::shared_ptr<Matrix>& wo, int neg);
+  ~OneVsSomeLoss() noexcept override = default;
   real forward(
       const std::vector<int32_t>& targets,
       int32_t targetIndex,

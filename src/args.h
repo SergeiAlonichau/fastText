@@ -37,12 +37,14 @@ class Args {
  public:
   Args();
   std::string input;
+  std::string inputModel;
   std::string output;
   double lr;
   int lrUpdateRate;
   int dim;
   int ws;
   int epoch;
+  int nepoch;
   int minCount;
   int minCountLabel;
   int neg;

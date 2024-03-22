@@ -12,7 +12,6 @@
 #include <ostream>
 #include <vector>
 
-#include "aligned.h"
 #include "real.h"
 
 namespace fasttext {
@@ -21,12 +20,12 @@ class Matrix;
 
 class Vector {
  protected:
-  intgemm::AlignedVector<real> data_;
+  std::vector<real> data_;
 
  public:
   explicit Vector(int64_t);
   Vector(const Vector&) = default;
-  Vector(Vector&&) = default;
+  Vector(Vector&&) noexcept = default;
   Vector& operator=(const Vector&) = default;
   Vector& operator=(Vector&&) = default;
 
@@ -55,6 +54,8 @@ class Vector {
   void addRow(const Matrix&, int64_t, real);
   void mul(const Matrix&, const Vector&);
   int64_t argmax();
+  void save(std::ostream&) const;
+  void load(std::istream&);
 };
 
 std::ostream& operator<<(std::ostream&, const Vector&);
