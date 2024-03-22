@@ -141,19 +141,20 @@ modified: src/vector.cc
 modified: src/vector.h
 ```
 
-What is this for
+### Description
 Added two new parameters -nepoch index of a current epoch, -inputModel <checkpoint_files_prefix> .
 When -nepoch N is specified the tool exits after each epoch and saves checkpoint files with checkpoint_files_prefix .
 When -nepoch 0 the checkpoint is not loaded.
 For large data that does not fit into memory, you need to shuffle it and split into equal large parts (as big as fits into memory) for the best performance.
 
-This allows for:
+This allows to do:
+1. training and evaluation after each epoch
+2. training on split set of data with all data not fitting into memory at once
+3. fine tuning already trained model
+   
+### Usage examples:
 
-training and evaluation after each epoch
-training on split set of data with all data not fitting into memory at once
-fine tuning already trained model
-Usage examples:
-Regular training in one shot with all the data:
+#### Regular training in one shot with all the data:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modelx -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10
 ./fasttext test modelx.bin in_sample_td_1p.txt 1
@@ -171,7 +172,7 @@ R@1     0.994
 Number of examples: 4002234
 ```
 
-Training one epoch after another with checkpoints on the same data:
+#### Training one epoch after another with checkpoints on the same data:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10 -nepoch 0 -inputModel empty.bin
 ./fasttext test model0.bin in_sample_td_1p.txt 1
@@ -223,7 +224,7 @@ R@1     0.993
 Number of examples: 4002234
 ```
 
-Test training one epoch after another with two different parts of TD:
+#### Test training one epoch after another with two different parts of TD:
 ```
 $ wc -l td*txt
   2001138 td_part1.txt
@@ -243,7 +244,7 @@ R@1     0.805
 Number of examples: 4002234
 ```
 
-Compare it to the 1 epoch e2e without a split:
+#### Compare it to the 1 epoch e2e without a split:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 1
 ./fasttext test modely.bin in_sample_td_1p.txt 1
@@ -254,7 +255,8 @@ P@1     0.805
 R@1     0.805
 Number of examples: 4002234
 ```
-Train with 2 parts of data for 10 epoch (equivalent to examples 1 & 2 but data are split into two random equal in size parts):
+
+#### Train with 2 parts of data for 10 epoch (equivalent to examples 1 & 2 but data are split into two random equal in size parts):
 ```
 ./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 20 -nepoch 0
 ./fasttext test model0.bin in_sample_td_1p.txt 1
@@ -296,7 +298,7 @@ R@1     0.993
 Number of examples: 4002234
 ```
 
-Test OVA Loss
+#### Test OVA Loss
 ```
 ./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 2 -nepoch 0
 ./fasttext test model0.bin in_sample_td_1p.txt 1
@@ -304,7 +306,7 @@ Test OVA Loss
 ./fasttext test model1.bin in_sample_td_1p.txt 1
 ```
 
-Compare it to the 1 epoch e2e without a split:
+#### Compare it to the 1 epoch e2e without a split:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 1
 ./fasttext test modely.bin in_sample_td_1p.txt 1
