@@ -124,7 +124,7 @@ $ pip install .
 For further information and introduction see python/README.md
 
 
-## INCREMENTAL TRAINING 
+## Incremental Training
 
 On branch IncrementalTraining
 Changes to be committed:
@@ -157,7 +157,8 @@ Regular training in one shot with all the data:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modelx -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 10
 ./fasttext test modelx.bin in_sample_td_1p.txt 1
-
+```
+```
 Read 96M words
 Number of words:  234072
 Number of labels: 2
@@ -181,8 +182,8 @@ for e in 1 2 3 4 5 6 7 8 9 ; do
   echo ./fasttext test model$e.bin in_sample_td_1p.txt 1 ;
   ./fasttext test model$e.bin in_sample_td_1p.txt 1 ;
 done
-
-
+```
+```
 ...
 
 Read 96M words
@@ -234,20 +235,27 @@ $ wc -l td*txt
 ./fasttext test model0.bin in_sample_td_1p.txt 1
 ./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model0.bin -epoch 2 -nepoch 1
 ./fasttext test model1.bin in_sample_td_1p.txt 1
-
+```
+```
 N       4002234
 P@1     0.805
 R@1     0.805
 Number of examples: 4002234
-Compare it to the 1 epoch e2e without a split:
+```
 
+Compare it to the 1 epoch e2e without a split:
+```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 1
 ./fasttext test modely.bin in_sample_td_1p.txt 1
+```
+```
 N       4002234
 P@1     0.805
 R@1     0.805
 Number of examples: 4002234
+```
 Train with 2 parts of data for 10 epoch (equivalent to examples 1 & 2 but data are split into two random equal in size parts):
+```
 ./fasttext.exe supervised -input td_part2.txt -output model0 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -epoch 20 -nepoch 0
 ./fasttext test model0.bin in_sample_td_1p.txt 1
 ./fasttext.exe supervised -input td_part1.txt -output model1 -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -inputModel model0.bin -epoch 20 -nepoch 1
@@ -267,7 +275,8 @@ for e in `seq 2 2 19` ; do
   ./fasttext test model$n.bin in_sample_td_1p.txt 1 ;
 
 done
-
+```
+```
 ...
 Read 48M words
 Number of words:  228529
@@ -299,8 +308,8 @@ Compare it to the 1 epoch e2e without a split:
 ```
 ./fasttext.exe supervised -input in_sample_td_1p.txt -output modely -dim 2 -wordNgrams 6 -bucket 80000000 -thread 10 -verbose 1 -loss ova -epoch 1
 ./fasttext test modely.bin in_sample_td_1p.txt 1
-
-A:   0h 0m 0s
+```
+```
 N       4002234
 P@1     0.808
 R@1     0.808
